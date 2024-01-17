@@ -1,0 +1,75 @@
+---
+- name: prepare infrastructure
+  hosts: local
+  become: yes
+  tasks:
+  - name: create two servers in AWS cloud
+    ec2:
+      key_name: my_key
+      region: my_region
+      instance_type: t2.micro
+      image: ami-0b9064170e32bde34
+      aws_access_key: my_Access_Key
+      aws_secret_key: my_Secret_Access_Key
+      group: my_security_group
+      count: 2
+      vpc_subnet_id: my_vpc_subnet_id
+      assign_public_ip: yes
+      wait: true
+    register: var_ec2_job
+
+  - name: add two servers to host group
+    add_host:
+      hostname: "{{ item.public_ip }}"
+      groupname: launched
+    with_items: "{{ ec2.tagged_instances }}"
+    when: var_ec2_job is defined
+
+
+
+- name: group "build" - prepare infrastructure
+  hosts: build
+  become: yes
+  tasks:
+  - name: Ensure GIT,JAVA,MAVEN package is present
+    apt:
+      name: "{{ item }}"
+      state: present
+    with_items:
+      - git
+      - default-jdk
+      - maven
+
+
+- name: group "build" - make the artifact
+  hosts: build
+  become: yes
+  tasks:
+  - name: Clone GIT Repository for PROJECT
+    git:
+      repo: 'https://github.com/boxfuse/boxfuse-sample-java-war-hello.git'
+      dest: /tmp/boxfuse-sample-java-war-hello
+      clone: yes
+      update: yes
+  - name: Clean the artifact
+    file:
+      path: /tmp/boxfuse-sample-java-war-hello/target/hello-1.0.war
+      state: absent
+  - name: Build the artifact
+    shell: cd /tmp/boxfuse-sample-java-war-hello && mvn package
+
+
+- name: group "build" - copy artifact to "prod" server
+  hosts: build
+  become: yes
+  tasks:
+  - name: copy artifact to "prod" server
+    shell: rsync -avz /tmp/boxfuse-sample-java-war-hello/target/hello-1.0.war root@prod_host:/usr/local/tomcat/webapps/
+
+
+- name: group "prod" - run app
+  hosts: prod
+  become: yes
+  tasks:
+  - name: start app
+    shell: /usr/bin/tomcat start /usr/local/tomcat/webapps/hello-1.0.war

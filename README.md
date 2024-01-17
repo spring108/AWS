@@ -54,4 +54,4 @@
 
 
 
-## Смотрим http://prod_ip:8080/App42PaaS-Java-MySQL-Sample-0.0.1-SNAPSHOT/
+## Смотрим http://prod_ip:8080/hello-1.0/
